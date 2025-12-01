@@ -1,27 +1,100 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
 import AppLayout from '@/components/layout/AppLayout';
+import SceneCanvas from '@/components/three/SceneCanvas';
+import GridScene from '@/components/three/GridScene';
+import BrickPalette from '@/components/ui/BrickPalette';
+import { useBrickStore } from '@/store/brickStore';
+import { getChallenge } from '@/services/api';
+import { BrickInstance } from '@/types/bricks';
 
 export default function ChallengePage() {
+  const { resetBuild, currentBuild } = useBrickStore();
+  const [challenge, setChallenge] = useState<any>(null);
+  const [status, setStatus] = useState<'idle' | 'success' | 'failure'>('idle');
+
+  useEffect(() => {
+    resetBuild();
+    // Fetch challenge 1 hardcoded
+    getChallenge('1').then(setChallenge).catch(console.error);
+  }, [resetBuild]);
+
+  const checkBuild = () => {
+    if (!challenge) return;
+    
+    const targetBricks: BrickInstance[] = challenge.targetBuild.bricks;
+    const userBricks = currentBuild.bricks;
+
+    if (userBricks.length !== targetBricks.length) {
+      setStatus('failure');
+      return;
+    }
+
+    // Simple check: for every target brick, is there a matching user brick?
+    // We need to be loose on ID, but strict on Type, Color, Position, Rotation
+    const matched = targetBricks.every(t => {
+      return userBricks.some(u => 
+        u.typeId === t.typeId &&
+        u.colorId === t.colorId &&
+        Math.abs(u.position[0] - t.position[0]) < 0.1 &&
+        Math.abs(u.position[1] - t.position[1]) < 0.1 &&
+        Math.abs(u.position[2] - t.position[2]) < 0.1
+        // Ignore rotation exact match for now if symmetric, but let's assume loose check
+      );
+    });
+
+    setStatus(matched ? 'success' : 'failure');
+  };
+
+  if (!challenge) return <AppLayout><div className="p-8">Loading...</div></AppLayout>;
+
   return (
     <AppLayout>
-      <div className="p-8">
-        <h1 className="text-2xl font-bold mb-6">Daily Challenges</h1>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Stub Card */}
-          <div className="border border-gray-200 rounded-lg p-6 bg-white hover:shadow-md transition">
-            <div className="h-32 bg-gray-100 rounded mb-4 flex items-center justify-center text-gray-400">
-              [Preview Image]
+      <div className="relative w-full h-full">
+        <SceneCanvas>
+          <GridScene />
+          {/* Render Ghost Target? Optional, maybe just show instructions */}
+        </SceneCanvas>
+
+        <BrickPalette />
+
+        <div className="absolute top-4 left-4 w-80 bg-white/90 p-4 rounded-lg shadow-lg backdrop-blur-sm">
+          <h1 className="font-bold text-lg">{challenge.title}</h1>
+          <p className="text-sm text-gray-600 mb-4">{challenge.description}</p>
+          
+          <div className="mb-4">
+            <h3 className="font-semibold text-xs uppercase text-gray-500">Allowed Parts</h3>
+            <div className="flex flex-wrap gap-2 mt-1">
+              {challenge.allowed_parts.map((p: any) => (
+                <span key={p.part_id} className="text-xs bg-gray-100 px-2 py-1 rounded">
+                  {p.part_id} (x{p.max_quantity})
+                </span>
+              ))}
             </div>
-            <h3 className="font-bold text-lg mb-2">Build a Bridge</h3>
-            <p className="text-gray-600 text-sm mb-4">
-              Construct a bridge that can span 10 units without supports in the middle.
-            </p>
-            <button disabled className="px-4 py-2 bg-gray-300 text-gray-600 rounded cursor-not-allowed">
-              Coming Soon
+          </div>
+
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={checkBuild}
+              className="flex-1 bg-green-600 text-white py-2 rounded font-bold hover:bg-green-700"
+            >
+              Check Build
             </button>
           </div>
+
+          {status === 'success' && (
+            <div className="mt-4 p-3 bg-green-100 text-green-800 rounded text-center font-bold">
+              Challenge Complete! 🎉
+            </div>
+          )}
+          {status === 'failure' && (
+            <div className="mt-4 p-3 bg-red-100 text-red-800 rounded text-center">
+              Not quite right. Try again!
+            </div>
+          )}
         </div>
       </div>
     </AppLayout>
   );
 }
-
